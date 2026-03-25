@@ -1,0 +1,152 @@
+import re
+from collections import defaultdict
+
+# Intents
+INTENT_CONFIG = {
+    "admissions": {
+        "keywords": ["admission", "apply", "enroll", "join", "registration",
+                     "eligibility", "application", "intake", "form", "entrance"],
+        "response": " Admissions: Open every June. Apply at admissions.institute.edu. Min 60% in 12th required.",
+        
+    },
+    "exams": {
+        "keywords": ["exam", "examination", "test", "paper", "viva", "result",
+                     "marks", "grade", "assessment", "revaluation", "backlog", "arrear"],
+        "response": " Exams: Mid-sem in Oct/Mar. End-sem in Nov/Apr. Results on results.institute.edu in 3 weeks.",
+        
+    },
+    "timetable": {
+        "keywords": ["timetable", "schedule", "timing", "time", "class", "lecture",
+                     "period", "slot", "hours", "calendar", "routine"],
+        "response": " Timetable: College 9AM–5PM (Mon–Sat). New timetable released every semester start.",
+        
+    },
+    "hostel": {
+        "keywords": ["hostel", "dorm", "accommodation", "room", "lodge", "stay",
+                     "warden", "mess", "curfew", "guest house", "allotment"],
+        "response": " Hostel: Boys & girls hostels available. Apply by July 31st. ₹40,000/year including mess.",
+        
+    },
+    "fees": {
+        "keywords": ["fee", "fees", "tuition", "payment", "cost", "charges",
+                     "installment", "fine", "penalty", "due", "pay", "amount", "receipt"],
+        "response": " Fees: ₹85,000/year tuition. Pay via portal at fees.institute.edu. Deadline: July 31st.",
+       
+    },
+    "contact": {
+        "keywords": ["contact", "phone", "email", "call", "reach", "helpdesk",
+                     "office", "address", "principal", "hod", "staff", "faculty"],
+        "response": " Contact: +91-712-000-0000 | help@institute.edu | Room 101, Admin Block. Mon–Sat 10AM–4PM.",
+
+    },
+}
+
+# Preprocessing
+STOPWORDS = {
+    "i", "me", "my", "we", "the", "a", "an", "is", "are", "was", "do",
+    "does", "to", "of", "in", "on", "at", "for", "with", "and", "or",
+    "not", "tell", "please", "want", "need", "know", "also", "both",
+    "give", "about", "can", "will", "what", "how", "when", "where"
+}
+
+def preprocess_query(query: str) -> list:
+    tokens = re.findall(r'\b[a-z]{2,}\b', query.lower())
+    return [t for t in tokens if t not in STOPWORDS]
+
+# Multi-Intent Detector
+def detect_intents(query: str, threshold: int = 1) -> list:
+  
+    tokens = preprocess_query(query)
+    intent_scores = defaultdict(int)
+
+    for token in tokens:
+        for intent, config in INTENT_CONFIG.items():
+            if token in config["keywords"]:
+                intent_scores[intent] += 1
+
+   
+    matched = [(intent, score) for intent, score in intent_scores.items() if score >= threshold]
+    matched.sort(key=lambda x: x[1], reverse=True)
+    return matched
+
+# Response Generator
+def generate_response(query: str):
+    matched_intents = detect_intents(query)
+
+    print(f"\n{'='*58}")
+    print(f" Query: \"{query}\"")
+    print(f"{'='*58}")
+
+    if not matched_intents:
+        print(" Bot: I couldn't detect a clear intent in your query.")
+        print("   Try asking about: admissions, exams, timetable, hostel,")
+        print("   scholarships, fees, or contact.")
+        return
+
+    if len(matched_intents) == 1:
+        intent, score = matched_intents[0]
+        cfg = INTENT_CONFIG[intent]
+        print(f" Intent Detected:  {intent.upper()}  (confidence: {score} keyword match{'es' if score > 1 else ''})\n")
+        print(f" Bot: {cfg['response']}")
+
+    else:
+        
+        print(f" Multi-Intent Detected: {len(matched_intents)} intents found in your query!\n")
+        for rank, (intent, score) in enumerate(matched_intents, 1):
+            cfg = INTENT_CONFIG[intent]
+            bar = "▰" * score + "▱" * (5 - min(score, 5))
+            print(f"   Intent {rank}: {intent.upper():<14} [{bar}] ({score} hit{'s' if score>1 else ''})")
+
+        print(f"\n Bot: I found multiple topics in your question. Answering each:\n")
+        for intent, score in matched_intents:
+            cfg = INTENT_CONFIG[intent]
+            print(f"   [{intent.upper()}]")
+            print(f"     {cfg['response']}\n")
+
+# Session Intent Tracker
+def run_chatbot():
+
+    session_history = []
+
+    while True:
+        query = input("\n You: ").strip()
+        if not query:
+            continue
+        if query.lower() in ["quit", "exit", "bye"]:
+            print("\n Session Intent Summary:")
+            if session_history:
+                from collections import Counter
+                all_intents = [i for intents in session_history for i in intents]
+                counts = Counter(all_intents).most_common()
+                for intent, count in counts:
+                    cfg = INTENT_CONFIG.get(intent, {})
+                    emoji = cfg.get("emoji", "•")
+                    print(f"   {emoji} {intent}: asked {count} time(s)")
+            else:
+                print("   No intents tracked.")
+            print("\n Bot: Goodbye! ")
+            break
+
+        generate_response(query)
+
+      
+        intents_found = [i for i, _ in detect_intents(query)]
+        if intents_found:
+            session_history.append(intents_found)
+
+# Demo Test Cases
+if __name__ == "__main__":
+    test_queries = [
+        "What are the fees for hostel?",                           
+        "Tell me exam schedule and how to contact the office",      
+        "admission eligibility and scholarship for merit students",
+        "what is the class timetable this semester",               
+        "fees payment deadline and fine for late payment",         
+        "hostel room allotment, mess timing and warden contact",  
+        "hi good morning",                                          
+    ]
+
+    
+    for q in test_queries:
+        generate_response(q)
+    run_chatbot()
