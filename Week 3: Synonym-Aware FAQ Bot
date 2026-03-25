@@ -1,0 +1,154 @@
+import re
+import json
+from collections import defaultdict, Counter
+
+# FAQ Topics Keywords
+CANONICAL_TOPICS = {
+    "fees":        ["fees", "tuition", "payment", "cost", "charges", "amount"],
+    "admission":   ["admission", "apply", "enrollment", "join", "eligibility"],
+    "exam":        ["exam", "examination", "test", "paper", "assessment"],
+    "hostel":      ["hostel", "dorm", "accommodation", "lodge", "room"],
+    "scholarship": ["scholarship", "financial aid", "merit", "stipend", "bursary"],
+    "timing":      ["timing", "schedule", "hours", "timetable", "when"],
+    "contact":     ["contact", "email", "phone", "helpdesk", "reach"],
+    "documents":   ["documents", "certificate", "marksheet", "proof", "id"],
+}
+
+FAQ_ANSWERS = {
+    "fees":        "Annual tuition: ₹85,000. Hostel: ₹40,000/year. Scholarships available.",
+    "admission":   "Admissions open in June. Eligibility: 60%+ in 12th. Apply at admissions.institute.edu.",
+    "exam":        "Mid-sem: Oct & Mar. End-sem: Nov & Apr. Results in 3 weeks.",
+    "hostel":      "Separate hostels for boys/girls. Apply by July 31st. Capacity: 500 students.",
+    "scholarship": "Merit scholarships for top 10%. Government schemes for SC/ST/OBC. Apply by August.",
+    "timing":      "College: Mon–Sat 9AM–5PM. Office: 10AM–4PM. Library: till 7PM.",
+    "contact":     " +91-712-000-0000 |  help@institute.edu | Room 101, Admin Block.",
+    "documents":   "Required: 10th & 12th marksheets, ID proof, photo, caste certificate if applicable.",
+}
+
+# Synonym
+synonym_dict = {topic: set(keywords) for topic, keywords in CANONICAL_TOPICS.items()}
+
+# Chat Logs
+
+CHAT_LOGS = [
+    "what is the fee structure for the course",
+    "how much money do i need to pay for college",
+    "tell me about tuition expenses",
+    "I want to know the enrollment process",
+    "how to get admission in engineering",
+    "what is the joining procedure",
+    "when is the next assessment scheduled",
+    "give me details on the annual test",
+    "exam paper pattern please",
+    "is there lodging available on campus",
+    "what about the dorm facilities",
+    "hostel room allotment query",
+    "merit bursary eligibility criteria",
+    "financial assistance for poor students",
+    "when are college office timings",
+    "what time does the library close",
+    "how can I reach the helpdesk",
+    "give me phone number of admission cell",
+    "what certificates are needed for joining",
+    "which proof documents are required",
+    "what is the installment option for fees",       
+    "can i pay semester charges online",             
+    "registration details for new students",         
+    "what is the viva schedule",                    
+    "any guest house for outstation students",      
+    "government grant for students",                 
+    "class hours on monday",                         
+    "who is the administrative officer",             
+    "transfer certificate procedure",              
+]
+
+# Synonyms from Chat Logs ---
+def extract_candidate_words(log: str) -> list:
+    stopwords = {
+        "i", "me", "my", "the", "a", "an", "is", "are", "was", "be", "do",
+        "does", "to", "of", "in", "on", "at", "for", "with", "about", "and",
+        "or", "not", "what", "how", "when", "where", "who", "which", "tell",
+        "give", "get", "can", "please", "want", "need", "know", "details",
+        "any", "all", "this", "that", "it", "if", "us", "we", "you", "your"
+    }
+    words = re.findall(r'\b[a-z]{3,}\b', log.lower())
+    return [w for w in words if w not in stopwords]
+
+def build_synonyms_from_logs(logs: list, verbose: bool = True) -> dict:
+    new_synonyms = defaultdict(set)
+    word_topic_votes = defaultdict(Counter)  
+
+    for log in logs:
+        candidates = extract_candidate_words(log)
+        matched_topic = None
+
+        for word in candidates:
+            for topic, syns in synonym_dict.items():
+                if word in syns:
+                    matched_topic = topic
+                    break
+            if matched_topic:
+                break
+
+        if matched_topic:
+            for word in candidates:
+                if word not in synonym_dict[matched_topic]:
+                    word_topic_votes[word][matched_topic] += 1
+
+    for word, votes in word_topic_votes.items():
+        best_topic = votes.most_common(1)[0][0]
+        new_synonyms[best_topic].add(word)
+        synonym_dict[best_topic].add(word)
+
+    if verbose:
+
+        for topic, words in new_synonyms.items():
+            if words:
+                print(f"   {topic:12s} ← {', '.join(sorted(words))}")
+        print()
+
+    return dict(new_synonyms)
+
+# FAQ Matching with Synonym
+def match_with_synonyms(query: str) -> tuple:
+    query_words = set(re.findall(r'\b[a-z]{3,}\b', query.lower()))
+    best_topic = None
+    best_overlap = 0
+
+    for topic, syns in synonym_dict.items():
+        overlap = len(query_words & syns)
+        if overlap > best_overlap:
+            best_overlap = overlap
+            best_topic = topic
+
+    return best_topic, best_overlap
+
+# Save Updated Synonym
+def save_synonyms(filepath="synonym_dict.json"):
+    serializable = {k: list(v) for k, v in synonym_dict.items()}
+    with open(filepath, "w") as f:
+        json.dump(serializable, f, indent=2)
+    print(f" Synonym dictionary saved to {filepath}")
+
+# Main Chatbot
+def run_chatbot():
+
+    build_synonyms_from_logs(CHAT_LOGS, verbose=True)
+
+    while True:
+        query = input("\n You: ").strip()
+        if not query:
+            continue
+        if query.lower() in ["quit", "exit"]:
+            print(" Bot: Goodbye")
+            break
+
+        topic = match_with_synonyms(query)
+        if topic and score > 0:
+            print(f" Bot: {FAQ_ANSWERS[topic]}")
+        else:
+            print(" Bot: I couldn't match your question to a known topic.")
+            print("   Try: fees, admission, exam, hostel, scholarship, timing, contact, documents")
+
+if __name__ == "__main__":
+    run_chatbot()
