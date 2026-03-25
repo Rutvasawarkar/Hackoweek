@@ -1,0 +1,176 @@
+import re
+import math
+from collections import Counter
+
+# FAQ
+FAQ_DATA = [
+    {
+        "id": 1,
+        "question": "What is the fee structure for undergraduate courses?",
+        "answer": "Annual tuition fee is ₹85,000. Lab fees: ₹5,000/year. Payment accepted online or by DD."
+    },
+    {
+        "id": 2,
+        "question": "How can I pay my semester fees online?",
+        "answer": "Log in to the student portal at fees.institute.edu and pay using UPI, net banking, or card."
+    },
+    {
+        "id": 3,
+        "question": "What is the last date to pay fees without fine?",
+        "answer": "Fees must be paid by July 31st for odd semester and January 31st for even semester."
+    },
+    {
+        "id": 4,
+        "question": "How to apply for admission to the college?",
+        "answer": "Visit admissions.institute.edu, fill the form, upload documents, and pay ₹500 application fee."
+    },
+    {
+        "id": 5,
+        "question": "What are the eligibility criteria for admission?",
+        "answer": "Minimum 60% in 12th (PCM/PCB). Entrance test score required for engineering programs."
+    },
+    {
+        "id": 6,
+        "question": "When does the new academic session begin?",
+        "answer": "The new academic session starts in the first week of August every year."
+    },
+    {
+        "id": 7,
+        "question": "What is the exam schedule for the current semester?",
+        "answer": "Mid-semester exams: October 15–25. End-semester exams: November 20 – December 5."
+    },
+    {
+        "id": 8,
+        "question": "How can I check my exam results?",
+        "answer": "Results are published on results.institute.edu within 3 weeks after end-semester exams."
+    },
+    {
+        "id": 9,
+        "question": "What documents are required for hostel admission?",
+        "answer": "ID proof, 2 passport photos, medical fitness certificate, and fee receipt are required."
+    },
+    {
+        "id": 10,
+        "question": "How do I apply for a merit scholarship?",
+        "answer": "Students with 75%+ aggregate are eligible. Apply through the scholarship portal by August 31st."
+    },
+    {
+        "id": 11,
+        "question": "What is the contact number for the admission office?",
+        "answer": "Call +91-712-000-0000 (Mon–Sat, 10AM–4PM) or email admissions@institute.edu."
+    },
+    {
+        "id": 12,
+        "question": "What are the library timings?",
+        "answer": "Library is open Mon–Sat: 8AM–8PM and Sunday: 10AM–5PM. Digital access 24/7 via portal."
+    },
+]
+
+# Text
+STOPWORDS = {
+    "i", "me", "my", "we", "the", "a", "an", "is", "are", "was", "be",
+    "do", "does", "to", "of", "in", "on", "at", "for", "with", "and",
+    "or", "not", "what", "how", "when", "where", "can", "will", "please",
+    "tell", "give", "need", "want", "know", "about", "get", "have", "has"
+}
+
+def tokenize(text: str) -> list:
+    tokens = re.findall(r'\b[a-z]{2,}\b', text.lower())
+    return [t for t in tokens if t not in STOPWORDS]
+
+# TF-IDF
+class TFIDF:
+    def __init__(self, documents: list):
+        self.docs = documents
+        self.tokenized_docs = [tokenize(d["question"] + " " + d["answer"]) for d in documents]
+        self.N = len(documents)
+        self.idf = self._compute_idf()
+
+    def _compute_idf(self) -> dict:
+        df = Counter()
+        for tokens in self.tokenized_docs:
+            for word in set(tokens):
+                df[word] += 1
+        return {word: math.log((self.N + 1) / (count + 1)) + 1
+                for word, count in df.items()}
+
+    def _tf(self, tokens: list) -> dict:
+        count = Counter(tokens)
+        total = len(tokens) if tokens else 1
+        return {word: freq / total for word, freq in count.items()}
+
+    def _tfidf_vector(self, tokens: list) -> dict:
+        tf = self._tf(tokens)
+        return {word: tf[word] * self.idf.get(word, 0) for word in tf}
+
+    def _cosine_similarity(self, vec1: dict, vec2: dict) -> float:
+        common = set(vec1) & set(vec2)
+        dot = sum(vec1[w] * vec2[w] for w in common)
+        mag1 = math.sqrt(sum(v ** 2 for v in vec1.values()))
+        mag2 = math.sqrt(sum(v ** 2 for v in vec2.values()))
+        if mag1 == 0 or mag2 == 0:
+            return 0.0
+        return dot / (mag1 * mag2)
+
+    def search(self, query: str, top_k: int = 3) -> list:
+        query_tokens = tokenize(query)
+        query_vec = self._tfidf_vector(query_tokens)
+
+        scores = []
+        for i, tokens in enumerate(self.tokenized_docs):
+            doc_vec = self._tfidf_vector(tokens)
+            sim = self._cosine_similarity(query_vec, doc_vec)
+            scores.append((i, sim))
+
+        scores.sort(key=lambda x: x[1], reverse=True)
+        results = []
+        for idx, score in scores[:top_k]:
+            if score > 0:
+                results.append({
+                    "rank": len(results) + 1,
+                    "faq_id": self.docs[idx]["id"],
+                    "question": self.docs[idx]["question"],
+                    "answer": self.docs[idx]["answer"],
+                    "score": round(score, 4)
+                })
+        return results
+
+# Display Top-3 Results
+def display_results(results: list, query: str):
+    print(f"\n Query: \"{query}\"")
+    if not results:
+        print(" No relevant answers found. Try rephrasing your question.")
+        return
+
+    print(f" Top {len(results)} Matching Answer(s):\n")
+    bar_chars = 20
+
+    for r in results:
+        # Visual similarity bar
+        filled = int(r['score'] * bar_chars / max(results[0]['score'], 0.001))
+        bar = "" * filled + "" * (bar_chars - filled)
+
+        print(f"  {'🥇' if r['rank']==1 else '🥈' if r['rank']==2 else '🥉'} Rank {r['rank']}  |  Score: {r['score']:.4f}  [{bar}]")
+        print(f"   {r['question']}")
+        print(f"   {r['answer']}")
+        print()
+
+# Main Chatbot
+def run_chatbot():
+
+    engine = TFIDF(FAQ_DATA)
+    print(f"\n TF-IDF index built for {len(FAQ_DATA)} FAQ entries.\n")
+
+    while True:
+        query = input(" You: ").strip()
+        if not query:
+            continue
+        if query.lower() in ["quit", "exit"]:
+            print(" Bot: Goodbye! ")
+            break
+
+        results = engine.search(query, top_k=3)
+        display_results(results, query)
+
+if __name__ == "__main__":
+    run_chatbot()
