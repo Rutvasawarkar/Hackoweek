@@ -1,0 +1,204 @@
+import re
+import string
+
+# Student Slang 
+SLANG_MAP = {
+    # Time-related
+    "tmrw": "tomorrow", "tmr": "tomorrow", "2day": "today",
+    "2nite": "tonight", "tonite": "tonight", "nxt": "next",
+    "lst": "last", "b4": "before", "aftr": "after",
+
+    # Common abbreviations
+    "pls": "please", "plz": "please", "plss": "please",
+    "info": "information", "asap": "as soon as possible",
+    "idk": "i do not know", "ngl": "not going to lie",
+    "tbh": "to be honest", "imo": "in my opinion",
+    "fyi": "for your information", "btw": "by the way",
+    "bc": "because", "cuz": "because", "cos": "because",
+    "abt": "about", "wrt": "with respect to",
+    "w/o": "without", "w/": "with",
+
+    # Institute slangs
+    "sem": "semester", "semster": "semester",
+    "yr": "year", "yrs": "years",
+    "dept": "department", "dep": "department",
+    "uni": "university", "clg": "college",
+    "lib": "library", "admin": "administration",
+    "sub": "subject", "subs": "subjects",
+    "prof": "professor", "profs": "professors",
+    "lec": "lecture", "lecs": "lectures",
+    "tut": "tutorial", "lab": "laboratory",
+    "hod": "head of department",
+    "backlog": "pending examination", "arrear": "pending examination",
+    "atkt": "allowed to keep term",
+    "exam": "exm,"
+
+    # Query words
+    "hw": "how", "wht": "what", "whn": "when",
+    "whr": "where", "hlp": "help", "nd": "and",
+    "r": "are", "u": "you", "ur": "your",
+    "cn": "can", "cud": "could", "shud": "should",
+    "wud": "would", "hv": "have", "hav": "have",
+    "dis": "this", "dat": "that", "dey": "they",
+    "gimme": "give me", "lemme": "let me", "gonna": "going to",
+    "wanna": "want to", "gotta": "got to", "kinda": "kind of",
+}
+
+# Lowercase
+def to_lowercase(text: str) -> str:
+    return text.lower()
+
+# Slang Normalizer
+def normalize_slang(text: str) -> tuple[str, list]:
+    words = text.split()
+    normalized_words = []
+    replacements = []
+
+    for word in words:
+        
+        clean_word = word.strip(string.punctuation)
+        punct_suffix = word[len(clean_word):]
+
+        if clean_word in SLANG_MAP:
+            replacement = SLANG_MAP[clean_word]
+            replacements.append((clean_word, replacement))
+            normalized_words.append(replacement + punct_suffix)
+        else:
+            normalized_words.append(word)
+
+    return " ".join(normalized_words), replacements
+
+# Tokenization
+def tokenize(text: str) -> list:
+    tokens = re.findall(r'\b\w+\b', text)
+    return tokens
+
+# Stopword Removal
+STOPWORDS = {
+    "i", "me", "my", "we", "our", "you", "your", "he", "she",
+    "it", "they", "them", "the", "a", "an", "is", "are", "was",
+    "were", "be", "been", "being", "have", "has", "had", "do",
+    "does", "did", "will", "would", "shall", "should", "may",
+    "might", "can", "could", "to", "of", "in", "on", "at",
+    "by", "for", "with", "about", "as", "into", "through",
+    "so", "if", "or", "and", "but", "not", "also", "just"
+}
+
+def remove_stopwords(tokens: list) -> list:
+    return [t for t in tokens if t not in STOPWORDS]
+
+# Punctuation Handling
+def clean_punctuation(text: str) -> str:
+    
+    text = re.sub(r"[^\w\s']", " ", text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+#  Basic Spelling Normalization
+def normalize_repeated_chars(text: str) -> str:
+    # plsssss → pls, heeelp → help
+    return re.sub(r'(.)\1{2,}', r'\1\1', text)
+
+# Full Preprocessing
+def preprocess(raw_query: str, verbose: bool = True) -> dict:
+    if verbose:
+        print(f"\n{'='*50}")
+        print(f" Raw Input     : {raw_query}")
+
+    step1 = to_lowercase(raw_query)
+    step2 = normalize_repeated_chars(step1)
+    step3 = clean_punctuation(step2)
+    step4, replacements = normalize_slang(step3)
+    step5 = tokenize(step4)
+    step6 = remove_stopwords(step5)
+
+    if verbose:
+        print(f" Lowercased    : {step1}")
+        print(f"  Repeated Fix  : {step2}")
+        print(f" Punct Cleaned : {step3}")
+
+        if replacements:
+            slang_display = ", ".join([f"'{s}' → '{r}'" for s, r in replacements])
+            print(f"  Slang Fixed   : {step4}  [{slang_display}]")
+        else:
+            print(f"  Slang Fixed   : {step4}  [no slang found]")
+
+        print(f" Tokens        : {step5}")
+        print(f" Final Tokens  : {step6}")
+        print(f"{'='*50}")
+
+    return {
+        "original": raw_query,
+        "final_tokens": step6,
+        "normalized_text": step4,
+        "slang_replacements": replacements
+    }
+
+# --- Demo ---
+if __name__ == "__main__":
+    test_queries = [
+        "plz tell me abt tmrw exam schedule",
+        "wht r the fees for nxt sem",
+        "cn u hlp me wid hostel admission asap",
+        "idk hw 2 apply 4 scholarship b4 Aug",what
+        "when is the library open",   # no slang - should pass through clean
+    ]
+
+    print(" Week 2 - Student Query Preprocessor with Slang Normalizer\n")
+    for q in test_queries:
+        result = preprocess(q, verbose=True)
+
+# --- Pattern Matching Engine ---
+def match_faq(user_input: str):
+    user_input_lower = user_input.lower()
+    for topic, data in FAQ_DB.items():
+        for pattern in data["patterns"]:
+            if re.search(r'\b' + pattern + r'\b', user_input_lower):
+                return topic, data
+    return None, None
+
+# --- Follow-up Suggestion Display ---
+def show_followups(followups: list):
+    print("\n You might also be interested in knowing:")
+    for i, q in enumerate(followups, 1):
+        print(f"   [{i}] {q}")
+    print("   [0] Ask something else")
+
+# --- Main Chatbot Loop ---
+def run_chatbot():
+
+    last_followups = []
+
+    while True:
+        user_input = input("\n User: ").strip()
+
+        if not user_input:
+            continue
+        if user_input.lower() in ["quit", "exit", "bye"]:
+            print("Thank you")
+            break
+
+        # Handle follow-up selection by number
+        if user_input.isdigit() and last_followups:
+            choice = int(user_input)
+            if choice == 0:
+                last_followups = []
+                print(" Bot: Sure! Ask me anything about the institute.")
+                continue
+            elif 1 <= choice <= len(last_followups):
+                user_input = last_followups[choice - 1]
+                print(f" Selected: {user_input}")
+
+        topic, data = match_faq(user_input)
+
+        if data:
+            print(f"\n Bot: {data['answer']}")
+            last_followups = data["followups"]
+            show_followups(last_followups)
+        else:
+            print("Bot: Sorry, I couldn't find an answer for that.")
+            print("Try asking about: admissions, fees, timings, exams, hostel or contacts.")
+            last_followups = []
+
+if __name__ == "__main__":
+    run_chatbot()
